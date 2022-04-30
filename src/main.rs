@@ -42,22 +42,16 @@ pub fn main() {
 // ================================================================================================
 
 fn perform_intt<E: FieldElement>(num_cols: usize, log_n_rows: u32, field: &str) -> Matrix<E> {
-    let now = Instant::now();
     let matrix = build_rand_matrix::<E>(num_cols, log_n_rows);
-    println!(
-        "[{}] built a random matrix of {} columns and 2^{} rows in {} ms",
-        field,
-        matrix.num_cols(),
-        log2(matrix.num_rows()),
-        now.elapsed().as_millis()
-    );
 
     let now = Instant::now();
     let result = matrix.interpolate_columns();
     println!(
-        "[{}] interpolated matrix into polynomials in {} ms",
+        "[{}] interpolated {} columns of length 2^{} into polynomials in {:.2} sec",
         field,
-        now.elapsed().as_millis()
+        matrix.num_cols(),
+        log2(matrix.num_rows()),
+        now.elapsed().as_millis() as f64 / 1000_f64
     );
     result
 }
@@ -68,15 +62,16 @@ fn perform_lde<E: FieldElement>(
     field: &str,
 ) -> Matrix<E> {
     let now = Instant::now();
+    let matrix = matrix.interpolate_columns();
     let result = matrix.evaluate_columns_over(domain);
     println!(
-        "[{}] extended {} columns from 2^{} to 2^{} ({}x blowup) in {} ms",
+        "[{}] extended {} columns from 2^{} to 2^{} ({}x blowup) in {:.2} sec",
         field,
         matrix.num_cols(),
         log2(matrix.num_rows()),
         log2(domain.lde_domain_size()),
         domain.trace_to_lde_blowup(),
-        now.elapsed().as_millis()
+        now.elapsed().as_millis() as f64 / 1000_f64
     );
     result
 }
@@ -87,10 +82,10 @@ fn build_merkle_tree<E: FieldElement, H: ElementHasher<BaseField = E::BaseField>
     let now = Instant::now();
     let result = matrix.commit_to_rows();
     println!(
-        "build Merkle tree from a matrix with {} columns and 2^{} rows in {} ms",
+        "build Merkle tree from a matrix with {} columns and 2^{} rows in {:.2} ms",
         matrix.num_cols(),
         log2(matrix.num_rows()),
-        now.elapsed().as_millis()
+        now.elapsed().as_millis() as f64 / 1000_f64
     );
     result
 }

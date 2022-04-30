@@ -1,0 +1,12 @@
+[package]
+name = "stark-bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "stark-bench"
+path = "src/main.rs"
+
+[dependencies]
+prover = { package = "winter-prover", version = "0.4", features = ["concurrent"] }
+rand-utils = { package = "winter-rand-utils", version = "0.4" }

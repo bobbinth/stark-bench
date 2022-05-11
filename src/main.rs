@@ -1,5 +1,5 @@
 use prover::{
-    crypto::{hashers::Rp64_256, ElementHasher, MerkleTree},
+    crypto::{hashers::Rp64_256, ElementHasher},
     iterators::*,
     math::{
         fields::{f64::BaseElement as Felt, CubeExtension, QuadExtension},
@@ -10,84 +10,72 @@ use prover::{
 };
 use rand_utils::rand_vector;
 use std::time::Instant;
+use structopt::StructOpt;
 
 pub fn main() {
-    let num_cols = 100;
-    let log_n_rows = 23;
-    let blowup_factor = 4;
+    // read command-line args
+    let options = BenchOptions::from_args();
 
-    let domain = build_domain(num_cols, log_n_rows, blowup_factor);
-
-    // ----- base field ---------------------------------------------------------------------------
-
-    let result = perform_intt::<Felt>(num_cols, log_n_rows, "base");
-    let result = perform_lde(result, &domain, "base");
-    let result = build_merkle_tree::<Felt, Rp64_256>(result);
-    std::mem::forget(result);
-
-    // ----- quadratic extension ------------------------------------------------------------------
-
-    let result = perform_intt::<QuadExtension<Felt>>(num_cols, log_n_rows, "quad");
-    let result = perform_lde(result, &domain, "quad");
-    std::mem::forget(result);
-
-    // ----- cubic extension ----------------------------------------------------------------------
-
-    let result = perform_intt::<CubeExtension<Felt>>(num_cols, log_n_rows, "cube");
-    let result = perform_lde(result, &domain, "cube");
-    std::mem::forget(result);
+    match options.extension_degree {
+        1 => run_benchmarks::<Felt, Rp64_256>(options),
+        2 => run_benchmarks::<QuadExtension<Felt>, Rp64_256>(options),
+        3 => run_benchmarks::<CubeExtension<Felt>, Rp64_256>(options),
+        _ => panic!(""),
+    }
 }
 
 // BENCHMARK FUNCTIONS
 // ================================================================================================
 
-fn perform_intt<E: FieldElement>(num_cols: usize, log_n_rows: u32, field: &str) -> Matrix<E> {
-    let matrix = build_rand_matrix::<E>(num_cols, log_n_rows);
+fn run_benchmarks<E, H>(options: BenchOptions)
+where
+    E: FieldElement<BaseField = Felt>,
+    H: ElementHasher<BaseField = E::BaseField>,
+{
+    let domain = build_domain(options.num_cols, options.log_n_rows, options.blowup);
+    //let trace = build_rand_matrix::<E>(options.num_cols, options.log_n_rows);
+    let trace = build_fib_matrix::<E>(options.num_cols, options.log_n_rows);
 
-    let now = Instant::now();
-    let result = matrix.interpolate_columns();
+    // perform interpolation
+    let start = Instant::now();
+    let polys = trace.interpolate_columns();
+    let interpolate_result = start.elapsed().as_millis() as f64 / 1000_f64;
+
+    // perform evaluation
+    let extended_trace = polys.evaluate_columns_over(&domain);
+    let lde_result = start.elapsed().as_millis() as f64 / 1000_f64;
+
+    // build Merkle tree
+    let mtree_start = Instant::now();
+    let _tree = extended_trace.commit_to_rows::<H>();
+    let mtree_result = mtree_start.elapsed().as_millis() as f64 / 1000_f64;
+    let overall_result = start.elapsed().as_millis() as f64 / 1000_f64;
+
+    // print out results
     println!(
-        "[{}] interpolated {} columns of length 2^{} into polynomials in {:.2} sec",
-        field,
-        matrix.num_cols(),
-        log2(matrix.num_rows()),
-        now.elapsed().as_millis() as f64 / 1000_f64
+        "interpolated {} columns of length 2^{} into polynomials in {:.2} sec",
+        trace.num_cols(),
+        log2(trace.num_rows()),
+        interpolate_result
     );
-    result
-}
 
-fn perform_lde<E: FieldElement>(
-    matrix: Matrix<E>,
-    domain: &StarkDomain<E::BaseField>,
-    field: &str,
-) -> Matrix<E> {
-    let now = Instant::now();
-    let matrix = matrix.interpolate_columns();
-    let result = matrix.evaluate_columns_over(domain);
     println!(
-        "[{}] extended {} columns from 2^{} to 2^{} ({}x blowup) in {:.2} sec",
-        field,
-        matrix.num_cols(),
-        log2(matrix.num_rows()),
-        log2(domain.lde_domain_size()),
+        "extended {} columns from 2^{} to 2^{} ({}x blowup) in {:.2} sec",
+        trace.num_cols(),
+        log2(trace.num_rows()),
+        log2(extended_trace.num_rows()),
         domain.trace_to_lde_blowup(),
-        now.elapsed().as_millis() as f64 / 1000_f64
+        lde_result
     );
-    result
-}
 
-fn build_merkle_tree<E: FieldElement, H: ElementHasher<BaseField = E::BaseField>>(
-    matrix: Matrix<E>,
-) -> MerkleTree<H> {
-    let now = Instant::now();
-    let result = matrix.commit_to_rows();
     println!(
-        "build Merkle tree from a matrix with {} columns and 2^{} rows in {:.2} ms",
-        matrix.num_cols(),
-        log2(matrix.num_rows()),
-        now.elapsed().as_millis() as f64 / 1000_f64
+        "built Merkle tree from a matrix with {} columns and 2^{} rows in {:.2} ms",
+        extended_trace.num_cols(),
+        log2(extended_trace.num_rows()),
+        mtree_result
     );
-    result
+
+    println!("total runtime {:.2} ms", overall_result);
 }
 
 // HELPER FUNCTIONS
@@ -109,10 +97,29 @@ fn build_domain(num_cols: usize, log_n_rows: u32, blowup_factor: usize) -> Stark
     StarkDomain::new(&air)
 }
 
+#[allow(dead_code)]
 fn build_rand_matrix<E: FieldElement>(num_cols: usize, log_n_rows: u32) -> Matrix<E> {
     let mut data = (0..num_cols).map(|_| Vec::new()).collect::<Vec<Vec<E>>>();
     data.par_iter_mut().for_each(|v| {
         *v = rand_vector(2_usize.pow(log_n_rows));
+    });
+
+    Matrix::new(data)
+}
+
+#[allow(dead_code)]
+fn build_fib_matrix<E: FieldElement>(num_cols: usize, log_n_rows: u32) -> Matrix<E> {
+    let num_rows = 2_usize.pow(log_n_rows);
+    let mut data = (0..num_cols)
+        .map(|_| Vec::with_capacity(num_rows))
+        .collect::<Vec<Vec<E>>>();
+
+    data.par_iter_mut().enumerate().for_each(|(i, column)| {
+        column.push(E::from(i as u64));
+        column.push(E::from(i as u64));
+        for i in 2..num_rows {
+            column.push(column[i - 1] + column[i - 2]);
+        }
     });
 
     Matrix::new(data)
@@ -152,4 +159,26 @@ impl Air for DummyAir {
     fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
+}
+
+// COMMAND LINE OPTIONS
+// ================================================================================================
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "sbench", about = "STARK benchmarks")]
+pub struct BenchOptions {
+    /// Number of columns
+    #[structopt(short = "c", long = "columns", default_value = "100")]
+    num_cols: usize,
+
+    /// Number of rows expressed as log2.
+    #[structopt(short = "n", long = "log_n_rows", default_value = "20")]
+    log_n_rows: u32,
+
+    /// Blowup factor
+    #[structopt(short = "b", long = "blowup", default_value = "8")]
+    blowup: usize,
+
+    #[structopt(short = "e", long = "extension", default_value = "1")]
+    extension_degree: usize,
 }

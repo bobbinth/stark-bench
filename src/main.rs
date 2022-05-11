@@ -20,7 +20,7 @@ pub fn main() {
         1 => run_benchmarks::<Felt, Rp64_256>(options),
         2 => run_benchmarks::<QuadExtension<Felt>, Rp64_256>(options),
         3 => run_benchmarks::<CubeExtension<Felt>, Rp64_256>(options),
-        _ => panic!(""),
+        _ => panic!("invalid field extension option"),
     }
 }
 
@@ -32,9 +32,14 @@ where
     E: FieldElement<BaseField = Felt>,
     H: ElementHasher<BaseField = E::BaseField>,
 {
+    let now = Instant::now();
     let domain = build_domain(options.num_cols, options.log_n_rows, options.blowup);
-    //let trace = build_rand_matrix::<E>(options.num_cols, options.log_n_rows);
-    let trace = build_fib_matrix::<E>(options.num_cols, options.log_n_rows);
+    let trace = build_rand_matrix::<E>(options.num_cols, options.log_n_rows);
+    //let trace = build_fib_matrix::<E>(options.num_cols, options.log_n_rows);
+    println!(
+        "prepared benchmark inputs in {:.2} sec",
+        now.elapsed().as_millis() as f64 / 1000_f64
+    );
 
     // perform interpolation
     let start = Instant::now();
@@ -69,13 +74,13 @@ where
     );
 
     println!(
-        "built Merkle tree from a matrix with {} columns and 2^{} rows in {:.2} ms",
+        "built Merkle tree from a matrix with {} columns and 2^{} rows in {:.2} sec",
         extended_trace.num_cols(),
         log2(extended_trace.num_rows()),
         mtree_result
     );
 
-    println!("total runtime {:.2} ms", overall_result);
+    println!("total runtime {:.2} sec", overall_result);
 }
 
 // HELPER FUNCTIONS
@@ -175,10 +180,11 @@ pub struct BenchOptions {
     #[structopt(short = "n", long = "log_n_rows", default_value = "20")]
     log_n_rows: u32,
 
-    /// Blowup factor
+    /// Blowup factor, must be a power of two
     #[structopt(short = "b", long = "blowup", default_value = "8")]
     blowup: usize,
 
+    // Field extension degree, must be either 1, 2, or 3
     #[structopt(short = "e", long = "extension", default_value = "1")]
     extension_degree: usize,
 }

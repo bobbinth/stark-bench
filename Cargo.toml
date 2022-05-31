@@ -8,6 +8,7 @@ name = "stark-bench"
 path = "src/main.rs"
 
 [dependencies]
+hex = { version = "0.4" }
 prover = { package = "winter-prover", version = "0.4", features = ["concurrent"] }
 rand-utils = { package = "winter-rand-utils", version = "0.4" }
 structopt = { version = "0.3", default-features = false }

@@ -1,5 +1,5 @@
 use prover::{
-    crypto::{hashers::{Rp64_256, Blake3_256}, ElementHasher},
+    crypto::{hashers::Blake3_256, Digest, ElementHasher},
     iterators::*,
     math::{
         fields::{f64::BaseElement as Felt, CubeExtension, QuadExtension},
@@ -34,8 +34,8 @@ where
 {
     let now = Instant::now();
     let domain = build_domain(options.num_cols, options.log_n_rows, options.blowup);
-    let trace = build_rand_matrix::<E>(options.num_cols, options.log_n_rows);
-    //let trace = build_fib_matrix::<E>(options.num_cols, options.log_n_rows);
+    //let trace = build_rand_matrix::<E>(options.num_cols, options.log_n_rows);
+    let trace = build_fib_matrix::<E>(options.num_cols, options.log_n_rows);
     println!(
         "prepared benchmark inputs in {:.2} sec",
         now.elapsed().as_millis() as f64 / 1000_f64
@@ -54,7 +54,7 @@ where
 
     // build Merkle tree
     let mtree_start = Instant::now();
-    let _tree = extended_trace.commit_to_rows::<H>();
+    let tree = extended_trace.commit_to_rows::<H>();
     let mtree_result = mtree_start.elapsed().as_millis() as f64 / 1000_f64;
     let overall_result = start.elapsed().as_millis() as f64 / 1000_f64;
 
@@ -89,6 +89,8 @@ where
         log2(extended_trace.num_rows()),
         mtree_result
     );
+
+    println!("Merkle tree root: {}", hex::encode(tree.root().as_bytes()));
 
     println!("total runtime {:.2} sec", overall_result);
 }
@@ -130,8 +132,8 @@ fn build_fib_matrix<E: FieldElement>(num_cols: usize, log_n_rows: u32) -> Matrix
         .collect::<Vec<Vec<E>>>();
 
     data.par_iter_mut().enumerate().for_each(|(i, column)| {
-        column.push(E::from(i as u64));
-        column.push(E::from(i as u64));
+        column.push(E::from(i as u64 + 1));
+        column.push(E::from(i as u64 + 1));
         for i in 2..num_rows {
             column.push(column[i - 1] + column[i - 2]);
         }

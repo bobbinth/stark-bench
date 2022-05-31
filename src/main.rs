@@ -1,5 +1,5 @@
 use prover::{
-    crypto::{hashers::Rp64_256, ElementHasher},
+    crypto::{hashers::{Rp64_256, Blake3_256}, ElementHasher},
     iterators::*,
     math::{
         fields::{f64::BaseElement as Felt, CubeExtension, QuadExtension},
@@ -17,9 +17,9 @@ pub fn main() {
     let options = BenchOptions::from_args();
 
     match options.extension_degree {
-        1 => run_benchmarks::<Felt, Rp64_256>(options),
-        2 => run_benchmarks::<QuadExtension<Felt>, Rp64_256>(options),
-        3 => run_benchmarks::<CubeExtension<Felt>, Rp64_256>(options),
+        1 => run_benchmarks::<Felt, Blake3_256<Felt>>(options),
+        2 => run_benchmarks::<QuadExtension<Felt>, Blake3_256<Felt>>(options),
+        3 => run_benchmarks::<CubeExtension<Felt>, Blake3_256<Felt>>(options),
         _ => panic!("invalid field extension option"),
     }
 }
@@ -47,7 +47,9 @@ where
     let interpolate_result = start.elapsed().as_millis() as f64 / 1000_f64;
 
     // perform evaluation
+    let eval_start = Instant::now();
     let extended_trace = polys.evaluate_columns_over(&domain);
+    let eval_result = eval_start.elapsed().as_millis() as f64 / 1000_f64;
     let lde_result = start.elapsed().as_millis() as f64 / 1000_f64;
 
     // build Merkle tree
@@ -62,6 +64,14 @@ where
         trace.num_cols(),
         log2(trace.num_rows()),
         interpolate_result
+    );
+
+    println!(
+        "evaluated {} polynomials of length 2^{} over domain 2^{} in {:.2} sec",
+        extended_trace.num_cols(),
+        log2(polys.num_rows()),
+        log2(extended_trace.num_rows()),
+        eval_result,
     );
 
     println!(

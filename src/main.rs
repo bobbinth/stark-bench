@@ -196,7 +196,7 @@ pub struct BenchOptions {
     #[structopt(short = "b", long = "blowup", default_value = "8")]
     blowup: usize,
 
-    // Field extension degree, must be either 1, 2, or 3
+    /// Field extension degree, must be either 1, 2, or 3
     #[structopt(short = "e", long = "extension", default_value = "1")]
     extension_degree: usize,
 }

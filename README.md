@@ -15,7 +15,7 @@ The above assumes that you have cloned the repo and installed Rust on your machi
 
 To view instructions on how to run benchmarks you can execute the following command:
 ```
-./target/release/stark-bench -- help
+./target/release/stark-bench --help
 ```
 Running the above command should print out the following text:
 ```
@@ -23,12 +23,13 @@ USAGE:
     stark-bench [OPTIONS]
 
 FLAGS:
-    -h, --help       Prints help information
+        --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
     -b, --blowup <blowup>                 Blowup factor, must be a power of two [default: 8]
     -e, --extension <extension-degree>    Field extension degree, must be either 1, 2, or 3 [default: 1]
+    -h, --hash_fn <hash-fn>               Hash function; must be either blake3 or rpo [default: blake3]
     -n, --log_n_rows <log-n-rows>         Number of rows expressed as log2 [default: 20]
     -c, --columns <num-cols>              Number of columns [default: 100]
 ```
@@ -45,9 +46,6 @@ Inputs for the benchmarks can be generated using two methodologies:
 In both cases the results should be similar, but random inputs take considerably more time to generate.
 
 To change the input method, you'll need to update the [main.rs](https://github.com/bobbinth/stark-bench/blob/main/src/main.rs#L37) and recompile the code.
-
-### Hash function
-The hash function is currently hard-coded to be BLAKE3. To change the hash function used, you'll need to update the [main.rs](https://github.com/bobbinth/stark-bench/blob/main/src/main.rs#L20) file and recompile the code.
 
 ## License
 This project is [MIT licensed](./LICENSE).

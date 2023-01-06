@@ -1,3 +1,4 @@
+use miden_crypto::hash::rpo::Rpo256;
 use prover::{
     crypto::{hashers::Blake3_256, Digest, ElementHasher},
     iterators::*,
@@ -5,8 +6,8 @@ use prover::{
         fields::{f64::BaseElement as Felt, CubeExtension, QuadExtension},
         log2, FieldElement,
     },
-    Air, AirContext, Assertion, EvaluationFrame, FieldExtension, HashFunction, Matrix,
-    ProofOptions, StarkDomain, TraceInfo, TransitionConstraintDegree,
+    Air, AirContext, Assertion, EvaluationFrame, Matrix, ProofOptions, StarkDomain, TraceInfo,
+    TransitionConstraintDegree,
 };
 use rand_utils::rand_vector;
 use std::time::Instant;
@@ -16,11 +17,14 @@ pub fn main() {
     // read command-line args
     let options = BenchOptions::from_args();
 
-    match options.extension_degree {
-        1 => run_benchmarks::<Felt, Blake3_256<Felt>>(options),
-        2 => run_benchmarks::<QuadExtension<Felt>, Blake3_256<Felt>>(options),
-        3 => run_benchmarks::<CubeExtension<Felt>, Blake3_256<Felt>>(options),
-        _ => panic!("invalid field extension option"),
+    match (options.hash_fn.as_str(), options.extension_degree) {
+        ("blake3", 1) => run_benchmarks::<Felt, Blake3_256<Felt>>(options),
+        ("blake3", 2) => run_benchmarks::<QuadExtension<Felt>, Blake3_256<Felt>>(options),
+        ("blake3", 3) => run_benchmarks::<CubeExtension<Felt>, Blake3_256<Felt>>(options),
+        ("rpo", 1) => run_benchmarks::<Felt, Rpo256>(options),
+        ("rpo", 2) => run_benchmarks::<QuadExtension<Felt>, Rpo256>(options),
+        ("rpo", 3) => run_benchmarks::<CubeExtension<Felt>, Rpo256>(options),
+        _ => unimplemented!(),
     }
 }
 
@@ -84,15 +88,16 @@ where
     );
 
     println!(
-        "built Merkle tree from a matrix with {} columns and 2^{} rows in {:.2} sec",
+        "built Merkle tree from a matrix with {} columns and 2^{} rows using {} hash function in {:.2} sec",
         extended_trace.num_cols(),
         log2(extended_trace.num_rows()),
+        options.hash_fn,
         mtree_result
     );
 
     println!("Merkle tree root: {}", hex::encode(tree.root().as_bytes()));
 
-    println!("total runtime {:.2} sec", overall_result);
+    println!("total runtime {overall_result:.2} sec");
 }
 
 // HELPER FUNCTIONS
@@ -105,8 +110,8 @@ fn build_domain(num_cols: usize, log_n_rows: u32, blowup_factor: usize) -> Stark
         40,
         blowup_factor,
         0,
-        HashFunction::Blake3_256,
-        FieldExtension::None,
+        prover::HashFunction::Blake3_256,
+        prover::FieldExtension::None,
         8,
         64,
     );
@@ -184,7 +189,7 @@ impl Air for DummyAir {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "sbench", about = "STARK benchmarks")]
 pub struct BenchOptions {
-    /// Number of columns
+    /// Number of columns.
     #[structopt(short = "c", long = "columns", default_value = "100")]
     num_cols: usize,
 
@@ -192,11 +197,15 @@ pub struct BenchOptions {
     #[structopt(short = "n", long = "log_n_rows", default_value = "20")]
     log_n_rows: u32,
 
-    /// Blowup factor, must be a power of two
+    /// Blowup factor, must be a power of two.
     #[structopt(short = "b", long = "blowup", default_value = "8")]
     blowup: usize,
 
-    /// Field extension degree, must be either 1, 2, or 3
+    /// Hash function; must be either blake3 or rpo.
+    #[structopt(short = "h", long = "hash_fn", default_value = "blake3")]
+    hash_fn: String,
+
+    /// Field extension degree, must be either 1, 2, or 3.
     #[structopt(short = "e", long = "extension", default_value = "1")]
     extension_degree: usize,
 }
